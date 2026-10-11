@@ -1,0 +1,18 @@
+services:
+  gatekit:
+    build: .
+    image: gatekit:latest
+    container_name: gatekit
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # Your database and CSV exports live on the host, not in the image.
+      - ./data:/app/data
+      - ./exports:/app/exports
+    # Nothing is exposed to the internet: Gatekit polls Telegram and the
+    # blockchain outbound only. No open ports, no inbound webhooks.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,30 @@
+; systemd unit for running Gatekit without Docker.
+; Install:
+;   sudo cp deploy/gatekit.service /etc/systemd/system/gatekit.service
+;   sudo systemctl daemon-reload && sudo systemctl enable --now gatekit
+;   sudo journalctl -u gatekit -f
+
+[Unit]
+Description=Gatekit - Telegram paid-subscription bot (USDT TRC20 / TON)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gatekit
+Group=gatekit
+WorkingDirectory=/opt/gatekit
+EnvironmentFile=/opt/gatekit/.env
+ExecStart=/opt/gatekit/.venv/bin/python -m gatekit
+Restart=always
+RestartSec=5
+
+# Hardening: the bot needs no privileges and no inbound network.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/gatekit/data /opt/gatekit/exports
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,69 @@
+[project]
+name = "gatekit"
+version = "1.0.0"
+description = "Self-hosted Telegram paid-subscription bot with direct USDT (TRC20) and TON payments. Non-custodial: funds go straight to your wallet."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Gatekit contributors" }]
+keywords = [
+  "telegram", "telegram-bot", "aiogram", "usdt", "trc20", "tron", "ton",
+  "subscriptions", "paid-channel", "crypto-payments", "self-hosted", "non-custodial",
+]
+classifiers = [
+  "Programming Language :: Python :: 3.11",
+  "License :: OSI Approved :: MIT License",
+  "Framework :: AsyncIO",
+  "Topic :: Communications :: Chat",
+]
+dependencies = [
+  "aiogram>=3.13,<4",
+  "SQLAlchemy[asyncio]>=2.0.30",
+  "aiosqlite>=0.20",
+  "httpx>=0.27",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+  "pytest-asyncio>=0.23",
+  "ruff>=0.5",
+]
+
+[project.urls]
+Homepage = "https://github.com/YOUR_GITHUB_USERNAME/telegram-usdt-subscription-bot"
+Issues = "https://github.com/YOUR_GITHUB_USERNAME/telegram-usdt-subscription-bot/issues"
+
+[project.scripts]
+gatekit = "gatekit.__main__:run"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+ignore = [
+  "B008",
+  # datetime.timezone.utc is kept over datetime.UTC: it reads the same on every
+  # Python version and copy-pasted snippets from this repo stay portable.
+  "UP017",
+  # `class X(str, Enum)` is deliberate rather than StrEnum — SQLAlchemy stores
+  # these through Enum(native_enum=False) and the str mixin keeps round-tripping
+  # explicit.
+  "UP042",
+]

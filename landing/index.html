@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gatekit — Telegram paid subscriptions, paid in USDT straight to your wallet</title>
+<meta name="description" content="Self-hosted Telegram subscription bot. Takes USDT (TRC20) and TON directly to your own wallet, issues single-use invite links, tracks expiry, removes lapsed members. Non-custodial, MIT licensed.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#0b0d0c;
+    --bg-2:#121614;
+    --bg-3:#171c19;
+    --line:#242b27;
+    --line-2:#2f3833;
+    --fg:#e8eeea;
+    --fg-2:#9aa8a1;
+    --fg-3:#6b7a73;
+    --usdt:#26a17b;
+    --usdt-dim:#1c7c5e;
+    --warn:#d9a336;
+    --gut:clamp(20px,5vw,80px);
+  }
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+  body{
+    font-family:'Inter',system-ui,sans-serif;
+    background:var(--bg);color:var(--fg);
+    line-height:1.62;font-size:16px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1100px;margin:0 auto;padding:0 var(--gut)}
+  .mono{font-family:'JetBrains Mono',monospace}
+  a{color:var(--usdt)}
+
+  /* nav */
+  nav{border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(11,13,12,.92);backdrop-filter:blur(8px);z-index:10}
+  .nav-in{display:flex;justify-content:space-between;align-items:center;padding:15px 0;gap:16px}
+  .brand{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;letter-spacing:-.02em}
+  .brand span{color:var(--usdt)}
+  .nav-links{display:flex;gap:22px;align-items:center;font-size:14px}
+  .nav-links a{color:var(--fg-2);text-decoration:none}
+  .nav-links a:hover{color:var(--fg)}
+  .btn{
+    display:inline-block;background:var(--usdt);color:#04110c;
+    padding:10px 18px;border-radius:4px;font-weight:600;font-size:14.5px;
+    text-decoration:none;border:1px solid var(--usdt);
+  }
+  .btn:hover{background:#2fb98d}
+  .btn-ghost{background:transparent;color:var(--fg);border:1px solid var(--line-2)}
+  .btn-ghost:hover{background:var(--bg-3);border-color:var(--fg-3)}
+
+  /* hero */
+  header{padding:clamp(56px,9vw,104px) 0 clamp(44px,6vw,72px);border-bottom:1px solid var(--line)}
+  .tagline{
+    font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--usdt);
+    letter-spacing:.14em;text-transform:uppercase;margin-bottom:22px;
+  }
+  h1{
+    font-size:clamp(31px,5.6vw,60px);line-height:1.06;letter-spacing:-.03em;
+    font-weight:700;max-width:19ch;
+  }
+  h1 em{font-style:normal;color:var(--usdt)}
+  .sub{margin-top:24px;font-size:clamp(17px,2.1vw,20.5px);color:var(--fg-2);max-width:56ch;line-height:1.55}
+  .sub b{color:var(--fg);font-weight:600}
+  .cta{margin-top:34px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .cta-note{font-size:13.5px;color:var(--fg-3)}
+
+  /* flow diagram */
+  .flow{
+    margin-top:46px;background:var(--bg-2);border:1px solid var(--line);
+    border-radius:6px;padding:clamp(18px,2.6vw,28px);overflow-x:auto;
+  }
+  .flow pre{
+    font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.85;
+    color:var(--fg-2);white-space:pre;
+  }
+  .flow pre b{color:var(--usdt);font-weight:500}
+  .flow pre i{color:var(--fg-3);font-style:normal}
+
+  /* sections */
+  section{padding:clamp(52px,7vw,84px) 0;border-bottom:1px solid var(--line)}
+  .kicker{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--usdt);letter-spacing:.14em;text-transform:uppercase;margin-bottom:14px}
+  h2{font-size:clamp(24px,3.4vw,36px);line-height:1.15;letter-spacing:-.022em;font-weight:700;max-width:26ch}
+  .lede{margin-top:16px;font-size:17.5px;color:var(--fg-2);max-width:66ch}
+  .lede b{color:var(--fg);font-weight:600}
+  h3{font-size:17px;font-weight:600;margin-bottom:7px;letter-spacing:-.01em}
+
+  /* feature grid */
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:1px;background:var(--line);margin-top:34px;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .cell{background:var(--bg-2);padding:26px 22px}
+  .cell p{font-size:14.8px;color:var(--fg-2);line-height:1.55}
+  .cell .ico{font-family:'JetBrains Mono',monospace;color:var(--usdt);font-size:13px;margin-bottom:12px;display:block}
+
+  /* guards table */
+  .tbl-scroll{overflow-x:auto;margin-top:32px;border:1px solid var(--line);border-radius:6px}
+  table{width:100%;border-collapse:collapse;font-size:14.8px;min-width:620px}
+  thead th{background:var(--bg-3);text-align:left;padding:13px 16px;font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-3);border-bottom:1px solid var(--line);font-weight:500}
+  tbody td{padding:15px 16px;border-bottom:1px solid var(--line);color:var(--fg-2);vertical-align:top;background:var(--bg-2)}
+  tbody tr:last-child td{border-bottom:none}
+  tbody td:first-child{color:var(--fg);font-family:'JetBrains Mono',monospace;font-size:13px;white-space:nowrap}
+
+  /* amount visual */
+  .amount-demo{margin-top:34px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+  .amt{background:var(--bg-2);border:1px solid var(--line);border-radius:6px;padding:26px 22px}
+  .amt-l{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--fg-3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:14px}
+  .amt-v{font-family:'JetBrains Mono',monospace;font-size:clamp(20px,3vw,27px);font-weight:500;letter-spacing:-.02em}
+  .amt-v u{text-decoration:none;color:var(--usdt);border-bottom:2px solid var(--usdt)}
+  .amt-n{margin-top:14px;font-size:14px;color:var(--fg-2);line-height:1.5}
+  .reject .amt-v{color:#c9605a}
+
+  /* code block */
+  pre.code{
+    margin-top:30px;background:var(--bg-2);border:1px solid var(--line);
+    border-radius:6px;padding:clamp(18px,2.4vw,26px);overflow-x:auto;
+    font-family:'JetBrains Mono',monospace;font-size:13.5px;line-height:1.85;color:var(--fg);
+  }
+  pre.code .c{color:var(--fg-3)}
+  pre.code .p{color:var(--usdt)}
+
+  /* compare */
+  .compare{display:grid;grid-template-columns:repeat(auto-fit,minmax(285px,1fr));gap:18px;margin-top:34px}
+  .opt{background:var(--bg-2);border:1px solid var(--line);border-radius:6px;padding:26px 22px}
+  .opt.pick{border-color:var(--usdt-dim);background:linear-gradient(180deg,rgba(38,161,123,.07),transparent)}
+  .opt h3{font-size:16.5px}
+  .opt .price{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--usdt);margin:10px 0 14px}
+  .opt p{font-size:14.5px;color:var(--fg-2);line-height:1.55}
+  .opt .verdict{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);font-size:14px;color:var(--fg)}
+
+  /* admin mock */
+  .term{margin-top:32px;background:#07100c;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .term-bar{background:var(--bg-3);padding:9px 15px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--fg-3);border-bottom:1px solid var(--line)}
+  .term pre{padding:22px;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.8;color:var(--fg-2);overflow-x:auto;white-space:pre}
+  .term pre b{color:var(--fg);font-weight:500}
+  .term pre .g{color:var(--usdt)}
+  .term pre .w{color:var(--warn)}
+
+  /* hire */
+  .hire{background:var(--bg-2);border:1px solid var(--usdt-dim);border-radius:8px;padding:clamp(26px,4vw,44px);margin-top:34px}
+  .hire ul{list-style:none;margin:22px 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:14px 26px}
+  .hire li{font-size:15px;color:var(--fg-2);padding-left:18px;position:relative;line-height:1.5}
+  .hire li:before{content:"→";position:absolute;left:0;color:var(--usdt)}
+
+  /* callout */
+  .callout{border-left:3px solid var(--warn);background:rgba(217,163,54,.06);padding:22px 24px;margin-top:30px;border-radius:0 5px 5px 0}
+  .callout p{font-size:15px;color:var(--fg-2);max-width:70ch}
+  .callout p+p{margin-top:12px}
+  .callout b{color:var(--fg)}
+
+  footer{padding:46px 0 70px;font-size:13.5px;color:var(--fg-3)}
+  footer p{max-width:72ch}
+  footer p+p{margin-top:12px}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap nav-in">
+    <div class="brand">gate<span>kit</span></div>
+    <div class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#safety">Safety</a>
+      <a href="#compare">Alternatives</a>
+      <a href="#hire">Hire</a>
+      <a class="btn btn-ghost" href="https://github.com/YOUR_GITHUB_USERNAME/telegram-usdt-subscription-bot" target="_blank" rel="noopener noreferrer">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<header>
+  <div class="wrap">
+    <div class="tagline">Self-hosted · MIT · Non-custodial</div>
+    <h1>Sell access to your Telegram channel. Get paid in <em>USDT</em>, straight to your wallet.</h1>
+    <p class="sub">
+      Gatekit takes payment on-chain, hands out single-use invite links, tracks every
+      subscription and removes lapsed members. <b>No payment processor, no revenue
+      share, no middleman holding your subscribers' money.</b> You run it, you hold the
+      keys.
+    </p>
+    <div class="cta">
+      <a class="btn" href="https://github.com/YOUR_GITHUB_USERNAME/telegram-usdt-subscription-bot" target="_blank" rel="noopener noreferrer">Get it on GitHub</a>
+      <a class="btn btn-ghost" href="#hire">Have it installed for you</a>
+      <span class="cta-note">One command to deploy. SQLite. No inbound ports.</span>
+    </div>
+
+    <div class="flow">
+<pre>subscriber sends USDT ──────►  <b>your wallet</b>          <i># Gatekit never touches the funds</i>
+                                  │
+   Gatekit reads the chain ───────┘
+        │
+        ├─► <b>issues a single-use invite link</b>       <i># expires in 30 minutes</i>
+        ├─► <b>records the expiry date</b>               <i># early renewal stacks days</i>
+        ├─► <b>reminds before renewal</b>                <i># 3 days out, then 1 day</i>
+        └─► <b>removes lapsed members</b>                <i># after grace, and only if 5 guards agree</i></pre>
+    </div>
+  </div>
+</header>
+
+<section id="how">
+  <div class="wrap">
+    <div class="kicker">The hard part</div>
+    <h2>A TRC20 transfer has no memo field</h2>
+    <p class="lede">
+      If two subscribers each send 39.00 USDT to the same wallet, the blockchain cannot
+      tell you who is who. Custodial services solve this by holding your money in their
+      account. Gatekit solves it with arithmetic: <b>every invoice gets a unique amount.</b>
+    </p>
+
+    <div class="amount-demo">
+      <div class="amt">
+        <div class="amt-l">Advertised price</div>
+        <div class="amt-v">39.000000</div>
+        <div class="amt-n">What the subscriber sees on your pricing page.</div>
+      </div>
+      <div class="amt">
+        <div class="amt-l">Invoice GK-7F3A9 asks for</div>
+        <div class="amt-v">39.00<u>4271</u></div>
+        <div class="amt-n">The last digits identify the invoice. Under one cent of variance, 9999 unique slots.</div>
+      </div>
+      <div class="amt reject">
+        <div class="amt-l">Someone rounds it</div>
+        <div class="amt-v">39.000000 ✕</div>
+        <div class="amt-n">Not auto-credited. It is flagged to you in <span class="mono">/unmatched</span> with the sender and tx id, and you grant access manually. A guess is never made.</div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="cell">
+        <span class="ico">exact</span>
+        <h3>Exact matching only</h3>
+        <p>Amounts are compared with decimal equality. No floats anywhere in the payment path, no "close enough" tolerance that lets the wrong person in.</p>
+      </div>
+      <div class="cell">
+        <span class="ico">once</span>
+        <h3>Replay-proof</h3>
+        <p>A transaction id can only ever be credited once, so a re-read chain page cannot grant two subscriptions.</p>
+      </div>
+      <div class="cell">
+        <span class="ico">ton</span>
+        <h3>TON matched by comment</h3>
+        <p>TON transfers do carry a comment, so TON invoices match on the invoice code — a stronger guarantee than TRC20 allows.</p>
+      </div>
+      <div class="cell">
+        <span class="ico">late</span>
+        <h3>Late and offline payments</h3>
+        <p>Pays while the bot is down? On start it looks three days back. Pays after the invoice expires? A configurable tolerance still honours it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="safety">
+  <div class="wrap">
+    <div class="kicker">The question everyone actually asks</div>
+    <h2>Will it kick a paying member?</h2>
+    <p class="lede">
+      One wrong removal costs more than a year of saved fees: the chat sees it, people
+      panic, subscriptions lapse. So removal is not an <span class="mono">if expired: kick</span>
+      branch. <b>Five independent guards must all agree</b> before anyone loses access.
+    </p>
+
+    <div class="tbl-scroll">
+      <table>
+        <thead><tr><th>Guard</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td>SAFE_MODE</td><td><b>On by default.</b> Nobody is ever removed — you only get told what would have happened. Run it this way for a week before enforcing.</td></tr>
+          <tr><td>Grace period</td><td>Access continues for a configurable number of days after expiry, with a warning to the subscriber.</td></tr>
+          <tr><td>Payment protection</td><td>Anyone who paid within the protection window is never removed, <b>whatever the dates say</b>. Real money beats a stale expiry field.</td></tr>
+          <tr><td>Idempotency</td><td>A member already removed is never touched again. Restarts and overlapping sweeps cannot double-act.</td></tr>
+          <tr><td>Manual confirm</td><td>Optional: every removal waits for an admin's click.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid">
+      <div class="cell">
+        <span class="ico">audit</span>
+        <h3>Every decision on the record</h3>
+        <p>Granted, reminded, entered grace, removed, removal refused — all appended to an audit log with the reason and whether a human or the scheduler did it. When a subscriber says they were treated unfairly, <span class="mono">/audit</span> settles it.</p>
+      </div>
+      <div class="cell">
+        <span class="ico">kick</span>
+        <h3>Removal lets them return</h3>
+        <p>Telegram's only kick primitive is a ban, so Gatekit bans and immediately unbans. A lapsed subscriber can resubscribe instead of being locked out forever.</p>
+      </div>
+      <div class="cell">
+        <span class="ico">test</span>
+        <h3>Provable before you trust it</h3>
+        <p>A self-test walks the entire money path against a fake chain and a fake Telegram — no token, no channel, no money. 53 unit tests and 56 end-to-end checks.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="kicker">Deploy</div>
+    <h2>One command, one file to fill in</h2>
+<pre class="code"><span class="c"># on any VPS with Docker</span>
+git clone https://github.com/YOUR_GITHUB_USERNAME/telegram-usdt-subscription-bot.git
+cd telegram-usdt-subscription-bot
+cp .env.example .env
+nano .env        <span class="c"># BOT_TOKEN, CHANNEL_ID, ADMIN_IDS, TRON_WALLET</span>
+<span class="p">docker compose up -d</span>
+
+<span class="c"># rehearse the whole flow first — no token, no money needed</span>
+<span class="p">python scripts/selftest.py</span>
+<span class="c"># → invoice → exact payment → access → reminder → expiry → removal</span></pre>
+    <p class="lede" style="margin-top:26px">
+      SQLite, so there is no database to install. No inbound ports and no webhooks —
+      Gatekit polls outbound only. A systemd unit ships alongside the Docker setup for
+      people who prefer it.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="kicker">Owner's view</div>
+    <h2>The admin panel lives inside the bot</h2>
+    <p class="lede">No web dashboard to secure, no extra port to open, nothing new to log into.</p>
+    <div class="term">
+      <div class="term-bar">you → @your_bot · /stats</div>
+<pre><b>Numbers</b>
+Paying now: <b>214</b> (active 208, grace 6)
+Paid but not joined: 3
+Lapsing within 7 days: <b>19</b>
+
+Revenue, last 30 days: <b class="g">8,346.00 USDT</b> (214 payments)
+Revenue, all time: 71,204.00 USDT
+Invoice → payment conversion, 30d: 63.4%
+
+Open invoices: 7
+Unmatched payments: <b class="w">1</b>
+
+<span class="w">⚠️ Unmatched money is waiting — see /unmatched</span></pre>
+    </div>
+    <p class="lede" style="margin-top:24px">
+      Plus <span class="mono">/subs</span>, <span class="mono">/expiring</span>,
+      <span class="mono">/export</span> (CSV), <span class="mono">/unmatched</span>,
+      <span class="mono">/audit</span>, <span class="mono">/grant</span>,
+      <span class="mono">/extend</span>, <span class="mono">/revoke</span>,
+      <span class="mono">/broadcast</span> and <span class="mono">/config</span>.
+      <b>Illustrative figures above</b> — it is a screenshot of the format, not a claim
+      about anyone's revenue.
+    </p>
+  </div>
+</section>
+
+<section id="compare">
+  <div class="wrap">
+    <div class="kicker">Honest comparison</div>
+    <h2>Gatekit is not always the right answer</h2>
+    <p class="lede">
+      Three real options. If one of the other two fits you better, use it — a tool that
+      oversells itself is not worth trusting with your channel.
+    </p>
+
+    <div class="compare">
+      <div class="opt">
+        <h3>Telegram Star Subscriptions</h3>
+        <div class="price">Free · built in since Aug 2024</div>
+        <p>
+          Native paid invite links, automatic renewal, automatic removal on non-payment.
+          No server, no maintenance. The cost is the cut: buying Stars in the mobile app
+          means roughly 30% to Apple or Google before Telegram's own withdrawal rate,
+          leaving the owner around 65–68%. Via Fragment on desktop it is closer to
+          93–96%. Payouts reach a TON wallet through Fragment with a 21-day hold.
+        </p>
+        <div class="verdict">Best if your audience is <b>not</b> crypto-native.</div>
+      </div>
+      <div class="opt">
+        <h3>A hosted service</h3>
+        <div class="price">~$19/mo flat · or 1–10% per sale</div>
+        <p>
+          InviteMember, Subscriby, MyMembers, Whop and others are mature, supported
+          products that work out of the box, and several accept crypto. Someone else is
+          on call when something breaks at 3am.
+        </p>
+        <div class="verdict">Best if you want <b>support</b>, not control.</div>
+      </div>
+      <div class="opt pick">
+        <h3>Gatekit</h3>
+        <div class="price">Free · MIT · you host it</div>
+        <p>
+          Worth it when your subscribers already hold USDT, you want the money in your
+          own wallet with no percentage and no hold period, you want the subscriber data
+          in a database you control, or you need logic a hosted product will not build
+          for you.
+        </p>
+        <div class="verdict">Requires a server, and you are the support team.</div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <p>
+        <b>On Telegram's rules.</b> Telegram's Bot Payments docs require Telegram Stars
+        for digital goods sold <b>through the Bot Payments API</b>. Gatekit does not use
+        that API: payment happens entirely on-chain, outside Telegram, and the bot only
+        manages channel access. There is no explicit prohibition in the Terms of Service
+        or Bot Developer Terms on accepting crypto for channel access, and services doing
+        exactly this have run for years without being blocked.
+      </p>
+      <p>
+        It is still a <b>grey area</b>: Telegram reserves the right, at its sole
+        discretion, to terminate a bot, its account and affiliated channels. Decide with
+        that in your eyes open — if your channel is your livelihood and you want zero
+        platform risk, use native Star Subscriptions.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section id="hire">
+  <div class="wrap">
+    <div class="kicker">Done for you</div>
+    <h2>Want it running on your server today?</h2>
+    <div class="hire">
+      <p class="lede" style="margin-top:0">
+        I wrote Gatekit and I install and customise it. The code is free — you pay for
+        the work, and it is <b>deployed on your server with the source handed over</b>.
+        The kill switch stays with you, not with me.
+      </p>
+      <ul>
+        <li><b>Installation</b> on your VPS, configured, tested end to end, handed over</li>
+        <li><b>Custom logic</b>: trials, discounts, referral programmes, tiered access</li>
+        <li><b>Multiple channels</b> in one bot, white-labelled to your brand</li>
+        <li><b>Integrations</b>: CRM, Google Sheets, analytics, your existing stack</li>
+        <li><b>Migration</b> from a hosted platform to self-hosted</li>
+        <li><b>Fixed price, escrow welcome</b>, async by default — no calls required</li>
+      </ul>
+      <div class="cta">
+        <a class="btn" href="https://t.me/YOUR_TELEGRAM" target="_blank" rel="noopener noreferrer">Message me on Telegram</a>
+        <a class="btn btn-ghost" href="https://github.com/YOUR_GITHUB_USERNAME/telegram-usdt-subscription-bot" target="_blank" rel="noopener noreferrer">Read the code first</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>
+      Gatekit · MIT licensed · non-custodial: the bot stores no private keys and never
+      moves funds.
+    </p>
+    <p>
+      Not affiliated with Telegram, Tether or the TRON Foundation. Nothing here is legal,
+      tax or financial advice. You are responsible for complying with the rules that
+      apply where you operate.
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
