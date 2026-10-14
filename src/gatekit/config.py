@@ -90,6 +90,14 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./data/gatekit.db"
     log_level: str = "INFO"
 
+    # ── 999.md Scraper & Trial ──────────────────────────────────────────────
+    scraper_enabled: bool = True
+    scraper_url: str = (
+        "https://999.md/ru/list/real-estate/apartments-and-rooms?applied=1&sort_type=date_desc"
+    )
+    scraper_interval_seconds: int = 30
+    trial_duration_hours: int = 24
+
     # ── Validators ──────────────────────────────────────────────────────────
     @field_validator("tron_network")
     @classmethod

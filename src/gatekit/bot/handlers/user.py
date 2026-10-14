@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, Message
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from gatekit.bot.keyboards import (
@@ -19,9 +20,9 @@ from gatekit.bot.keyboards import (
     plans_keyboard,
 )
 from gatekit.config import Settings
-from gatekit.db.models import Invoice, InvoiceStatus, Membership, MembershipState
+from gatekit.db.models import AuditLog, Invoice, InvoiceStatus, Membership, MembershipState, User
 from gatekit.services import invoices as invoice_service
-from gatekit.services.access import AccessManager
+from gatekit.services.access import AccessManager, audit
 from gatekit.texts import state_label, t
 
 log = logging.getLogger(__name__)
@@ -310,6 +311,106 @@ async def check_by_hash(
         await message.answer(t(lang, "tx_hash_wrong_amount", support=support))
 
 
+@router.message(Command("trial"))
+async def cmd_trial(
+    message: Message,
+    settings: Settings,
+    sessionmaker: async_sessionmaker,
+    access: AccessManager,
+    **_: object,
+) -> None:
+    """Grant 24 hours of free trial access to the user."""
+    if message.from_user is None:
+        return
+
+    async with sessionmaker() as session:
+        user = await invoice_service.ensure_user(
+            session,
+            user_id=message.from_user.id,
+            username=message.from_user.username,
+            full_name=message.from_user.full_name,
+            default_lang=_guess_lang(message, settings),
+        )
+        lang = user.lang
+
+        # 1. Check if trial was already used (flag, audit log, or past trial membership)
+        if getattr(user, "trial_used", False):
+            await message.answer(t(lang, "trial_already_used"))
+            return
+
+        trial_audit = await session.scalar(
+            select(AuditLog).where(
+                AuditLog.user_id == user.id,
+                AuditLog.action == "trial_granted",
+            )
+        )
+        if trial_audit is not None:
+            user.trial_used = True
+            await session.commit()
+            await message.answer(t(lang, "trial_already_used"))
+            return
+
+        membership = await session.get(Membership, user.id)
+        if membership and membership.plan_code == "trial":
+            user.trial_used = True
+            await session.commit()
+            await message.answer(t(lang, "trial_already_used"))
+            return
+
+        # 2. Check if user already has an active or in-grace paid subscription
+        now = datetime.now(tz=timezone.utc)
+        if (
+            membership
+            and (
+                (
+                    membership.state in {MembershipState.ACTIVE, MembershipState.PENDING}
+                    and _aware(membership.expires_at) > now
+                )
+                or membership.state == MembershipState.IN_GRACE
+            )
+            and membership.plan_code != "trial"
+        ):
+            await message.answer(
+                t(lang, "trial_already_active", expires=_fmt(membership.expires_at))
+            )
+            return
+
+        # 3. Grant 24 hours of free trial access
+        user.trial_used = True
+        duration = timedelta(hours=settings.trial_duration_hours)
+        membership, invite = await access.grant(
+            session,
+            user_id=user.id,
+            plan_code="trial",
+            plan_days=1,
+            actor="trial",
+            duration=duration,
+        )
+        await audit(
+            session,
+            "trial_granted",
+            user_id=user.id,
+            actor="trial",
+            expires_at=membership.expires_at,
+            hours=settings.trial_duration_hours,
+        )
+        await session.commit()
+
+        invite_section = ""
+        if invite:
+            invite_section = t(lang, "access_link", invite=invite) + "\n\n"
+
+        await message.answer(
+            t(
+                lang,
+                "trial_granted",
+                expires=_fmt(membership.expires_at),
+                invite_section=invite_section,
+            ),
+            disable_web_page_preview=True,
+        )
+
+
 @router.message(Command("status"))
 async def cmd_status(
     message: Message,
@@ -326,6 +427,13 @@ async def cmd_status(
             await message.answer(t(lang, "access_none"))
             return
         plan = settings.plan_by_code(membership.plan_code)
+        if plan:
+            plan_label_text = plan.label
+        elif membership.plan_code == "trial":
+            plan_label_text = "Тестовый доступ (24ч)" if lang == "ru" else "Free Trial (24h)"
+        else:
+            plan_label_text = membership.plan_code
+
         state = (
             membership.state.value
             if hasattr(membership.state, "value")
@@ -335,7 +443,7 @@ async def cmd_status(
             t(
                 lang,
                 "status",
-                plan=plan.label if plan else membership.plan_code,
+                plan=plan_label_text,
                 state=state_label(lang, state),
                 expires=_fmt(membership.expires_at),
                 days_left=_days_left(membership.expires_at),

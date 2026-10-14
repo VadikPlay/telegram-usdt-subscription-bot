@@ -73,15 +73,18 @@ class AccessManager:
         *,
         user_id: int,
         plan_code: str,
-        plan_days: int,
+        plan_days: int = 1,
         paid_at: datetime | None = None,
         actor: str = "system",
         amount_usdt: str | None = None,
+        duration: timedelta | None = None,
     ) -> tuple[Membership, str | None]:
         """Activate or extend a membership and hand back an invite link."""
         now = utcnow()
         membership = await session.get(Membership, user_id)
         previous_expiry = None
+
+        target_duration = duration if duration is not None else timedelta(days=plan_days)
 
         if membership is None:
             membership = Membership(
@@ -89,13 +92,14 @@ class AccessManager:
                 plan_code=plan_code,
                 state=MembershipState.PENDING,
                 started_at=now,
-                expires_at=next_expiry(None, now, plan_days),
+                expires_at=now + target_duration,
             )
             session.add(membership)
         else:
             previous_expiry = _aware(membership.expires_at)
             membership.plan_code = plan_code
-            membership.expires_at = next_expiry(previous_expiry, now, plan_days)
+            base = previous_expiry if previous_expiry and previous_expiry > now else now
+            membership.expires_at = base + target_duration
             # A renewal re-opens the reminder cycle for the new period.
             membership.reminders_sent = ""
             membership.pending_kick = False
@@ -105,11 +109,14 @@ class AccessManager:
             elif membership.state == MembershipState.IN_GRACE:
                 membership.state = MembershipState.ACTIVE
 
-        membership.last_payment_at = paid_at or now
-        membership.payments_count = (membership.payments_count or 0) + 1
-        if amount_usdt:
-            running_total = Decimal(str(membership.total_paid_usdt or "0")) + Decimal(amount_usdt)
-            membership.total_paid_usdt = str(quantize(running_total, 6))
+        # Record payment details only for actual paid subscriptions, never for free trial grants
+        is_trial = plan_code == "trial" or actor == "trial"
+        if not is_trial:
+            membership.last_payment_at = paid_at or now
+            membership.payments_count = (membership.payments_count or 0) + 1
+            if amount_usdt:
+                running_total = Decimal(str(membership.total_paid_usdt or "0")) + Decimal(amount_usdt)
+                membership.total_paid_usdt = str(quantize(running_total, 6))
 
         invite: str | None = None
         try:

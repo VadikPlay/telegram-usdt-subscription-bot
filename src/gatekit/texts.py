@@ -95,6 +95,7 @@ EN: dict[str, str] = {
     "help": (
         "<b>Commands</b>\n"
         "/start — plans and subscribing\n"
+        "/trial — 24h free trial access\n"
         "/status — your subscription\n"
         "/access — request your invite link again\n"
         "/lang — switch language\n"
@@ -104,6 +105,7 @@ EN: dict[str, str] = {
     "help_no_support": (
         "<b>Commands</b>\n"
         "/start — plans and subscribing\n"
+        "/trial — 24h free trial access\n"
         "/status — your subscription\n"
         "/access — request your invite link again\n"
         "/lang — switch language\n"
@@ -113,6 +115,28 @@ EN: dict[str, str] = {
     "not_admin": "This command is for admins only.",
     "plan_button": "{label} — {price} {currency}",
     "days_left_none": "0",
+    "trial_granted": (
+        "🎉 <b>You have received 24 hours of free trial access!</b>\n\n"
+        "Valid until: <b>{expires}</b>\n\n"
+        "{invite_section}"
+        "You will receive instant alerts when new ads appear on 999.md.\n"
+        "After 24 hours, you can renew or choose a plan via /start."
+    ),
+    "trial_already_used": (
+        "❌ <b>You have already used your free trial.</b>\n\n"
+        "To get access, please select a subscription plan via /start."
+    ),
+    "trial_already_active": (
+        "You already have an active subscription (valid until <b>{expires}</b>). "
+        "A trial is not needed."
+    ),
+    "ad_notification": (
+        "🔔 <b>New ad on 999.md!</b>\n\n"
+        "📌 <b>{title}</b>\n"
+        "💰 <b>Price:</b> {price}\n"
+        "🆔 <code>{id}</code>"
+    ),
+    "ad_open_button": "🔗 View on 999.md",
 }
 
 RU: dict[str, str] = {
@@ -203,6 +227,7 @@ RU: dict[str, str] = {
     "help": (
         "<b>Команды</b>\n"
         "/start — тарифы и подписка\n"
+        "/trial — бесплатный тест на 24 часа\n"
         "/status — ваша подписка\n"
         "/access — запросить ссылку заново\n"
         "/lang — сменить язык\n"
@@ -212,6 +237,7 @@ RU: dict[str, str] = {
     "help_no_support": (
         "<b>Команды</b>\n"
         "/start — тарифы и подписка\n"
+        "/trial — бесплатный тест на 24 часа\n"
         "/status — ваша подписка\n"
         "/access — запросить ссылку заново\n"
         "/lang — сменить язык\n"
@@ -221,6 +247,28 @@ RU: dict[str, str] = {
     "not_admin": "Эта команда только для администраторов.",
     "plan_button": "{label} — {price} {currency}",
     "days_left_none": "0",
+    "trial_granted": (
+        "🎉 <b>Вам выдан бесплатный тестовый доступ на 24 часа!</b>\n\n"
+        "Действует до: <b>{expires}</b>\n\n"
+        "{invite_section}"
+        "Вам будут мгновенно приходить новые объявления с 999.md.\n"
+        "По истечении 24 часов вы сможете выбрать тариф через /start."
+    ),
+    "trial_already_used": (
+        "❌ <b>Вы уже использовали бесплатный пробный период.</b>\n\n"
+        "Оформить доступ можно через /start."
+    ),
+    "trial_already_active": (
+        "У вас уже есть активная подписка (действует до <b>{expires}</b>). "
+        "Пробный период не требуется."
+    ),
+    "ad_notification": (
+        "🔔 <b>Новое объявление на 999.md!</b>\n\n"
+        "📌 <b>{title}</b>\n"
+        "💰 <b>Цена:</b> {price}\n"
+        "🆔 <code>{id}</code>"
+    ),
+    "ad_open_button": "🔗 Открыть на 999.md",
 }
 
 LOCALES: dict[str, dict[str, str]] = {"en": EN, "ru": RU}

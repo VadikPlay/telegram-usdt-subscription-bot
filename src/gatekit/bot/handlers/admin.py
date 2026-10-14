@@ -81,7 +81,8 @@ async def cmd_config(message: Message, settings: Settings, **_: object) -> None:
         f"Grace period: {settings.grace_period_days} day(s)\n"
         f"Payment protection: {settings.payment_protection_hours}h\n"
         f"Manual kick confirmation: {settings.require_manual_kick_confirmation}\n"
-        f"Reminders: {settings.reminder_day_list} day(s) before expiry\n\n"
+        f"Reminders: {settings.reminder_day_list} day(s) before expiry\n"
+        f"999.md scraper: {'enabled' if settings.scraper_enabled else 'disabled'} (every {settings.scraper_interval_seconds}s)\n\n"
         "<i>These come from .env — edit the file and restart to change them.</i>"
     )
 

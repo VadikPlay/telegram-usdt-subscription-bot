@@ -29,6 +29,7 @@ from gatekit.db.base import dispose_engine, get_sessionmaker, init_db
 from gatekit.services.access import AccessManager
 from gatekit.workers.payment_watcher import PaymentWatcher
 from gatekit.workers.scheduler import SubscriptionScheduler
+from gatekit.workers.scraper_worker import ScraperWorker
 
 log = logging.getLogger("gatekit")
 
@@ -173,6 +174,13 @@ async def run_bot() -> None:
     scheduler = SubscriptionScheduler(
         bot=bot, settings=settings, sessionmaker=sessionmaker, access=access
     )
+    scraper: ScraperWorker | None = None
+    if settings.scraper_enabled and settings.scraper_url:
+        scraper = ScraperWorker(
+            bot=bot,
+            settings=settings,
+            sessionmaker=sessionmaker,
+        )
 
     dp = Dispatcher()
     dp.include_router(admin_handlers.router)
@@ -185,6 +193,7 @@ async def run_bot() -> None:
         sessionmaker=sessionmaker,
         access=access,
         watcher=watcher,
+        scraper=scraper,
     )
 
     if settings.safe_mode:
@@ -194,11 +203,17 @@ async def run_bot() -> None:
         )
 
     tasks = [asyncio.create_task(watcher.run()), asyncio.create_task(scheduler.run())]
+    if scraper is not None:
+        tasks.append(asyncio.create_task(scraper.run()))
+
     try:
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
         watcher.stop()
         scheduler.stop()
+        if scraper is not None:
+            scraper.stop()
+            await scraper.close()
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)

@@ -84,6 +84,16 @@ def confirm_kick_keyboard(user_id: int) -> InlineKeyboardMarkup:
     )
 
 
+def ad_inline_keyboard(url: str, text: str = "🔗 Открыть объявление") -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=text, url=url),
+            ]
+        ]
+    )
+
+
 def amount_line(amount, decimals: int) -> str:
     """The exact string a payer must send — trailing zeros preserved."""
     return format_amount(amount, decimals)

@@ -65,6 +65,16 @@ async def init_db(database_url: str) -> None:
     engine = get_engine(database_url)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        def _migrate_columns(sync_conn):
+            if "sqlite" in database_url:
+                cursor = sync_conn.connection.cursor()
+                cursor.execute("PRAGMA table_info(users)")
+                cols = [row[1] for row in cursor.fetchall()]
+                if cols and "trial_used" not in cols:
+                    cursor.execute("ALTER TABLE users ADD COLUMN trial_used BOOLEAN DEFAULT 0")
+
+        await conn.run_sync(_migrate_columns)
     log.info("Database ready at %s", database_url)
 
 

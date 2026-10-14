@@ -57,6 +57,7 @@ class User(Base):
     lang: Mapped[str] = mapped_column(String(8), default="en")
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
+    trial_used: Mapped[bool] = mapped_column(Boolean, default=False)
 
     invoices: Mapped[list[Invoice]] = relationship(back_populates="user")
     membership: Mapped[Membership | None] = relationship(back_populates="user", uselist=False)
@@ -187,3 +188,17 @@ class ChainCursor(Base):
     chain: Mapped[str] = mapped_column(String(16), primary_key=True)
     last_ts_ms: Mapped[int] = mapped_column(BigInteger, default=0)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
+
+
+class SeenAd(Base):
+    """Tracks processed 999.md ads to ensure no duplicate notifications are sent."""
+
+    __tablename__ = "seen_ads"
+    __table_args__ = (Index("ix_seen_ads_created_at", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # Ad ID on 999.md
+    title: Mapped[str | None] = mapped_column(String(512))
+    price: Mapped[str | None] = mapped_column(String(128))
+    url: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
+
