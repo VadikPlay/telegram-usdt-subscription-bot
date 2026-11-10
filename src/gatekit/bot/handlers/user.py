@@ -6,24 +6,29 @@ import logging
 import re
 from datetime import datetime, timedelta, timezone
 
+from collections.abc import Awaitable, Callable
+
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandStart
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
+from aiogram.types import User as TgUser
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from gatekit.bot.keyboards import (
     amount_line,
+    back_keyboard,
     currency_keyboard,
     invoice_keyboard,
     lang_keyboard,
-    plans_keyboard,
+    main_menu_keyboard,
 )
 from gatekit.config import Settings
 from gatekit.db.models import AuditLog, Invoice, InvoiceStatus, Membership, MembershipState, User
 from gatekit.services import invoices as invoice_service
 from gatekit.services.access import AccessManager, audit
-from gatekit.texts import state_label, t
+from gatekit.texts import LOCALES, state_label, t
 
 log = logging.getLogger(__name__)
 router = Router(name="user")
@@ -54,6 +59,46 @@ async def _lang(session, user_id: int, settings: Settings) -> str:
     return user.lang if user else settings.default_lang
 
 
+def _plan_label(settings: Settings, plan_code: str, lang: str) -> str:
+    plan = settings.plan_by_code(plan_code)
+    if plan:
+        return plan.label
+    if plan_code == "trial":
+        return "Тестовый доступ (24ч)" if lang == "ru" else "Free Trial (24h)"
+    return plan_code
+
+
+async def _home_screen(
+    session, user: User, settings: Settings
+) -> tuple[str, InlineKeyboardMarkup | None]:
+    """Text + keyboard of the main menu. Shared by /start and the "back" button."""
+    lang = user.lang
+    plans = settings.plan_list
+    currencies = settings.enabled_currencies
+    if not plans or not currencies:
+        return t(lang, "no_plans"), None
+
+    membership = await session.get(Membership, user.id)
+    markup = main_menu_keyboard(
+        plans,
+        currencies,
+        lang,
+        show_trial=not user.trial_used and membership is None,
+        support_url=settings.support_url,
+        order_url=settings.order_url,
+    )
+    if membership and membership.state in {MembershipState.ACTIVE, MembershipState.PENDING}:
+        text = t(
+            lang,
+            "start_active",
+            plan=_plan_label(settings, membership.plan_code, lang),
+            expires=_fmt(membership.expires_at),
+            days_left=_days_left(membership.expires_at),
+        )
+        return text, markup
+    return t(lang, "start_greeting"), markup
+
+
 @router.message(CommandStart())
 async def cmd_start(
     message: Message,
@@ -72,43 +117,70 @@ async def cmd_start(
             default_lang=_guess_lang(message, settings),
         )
         await session.commit()
-        lang = user.lang
-
-        membership = await session.get(Membership, user.id)
-        plans = settings.plan_list
-        currencies = settings.enabled_currencies
-
-        if not plans or not currencies:
-            await message.answer(t(lang, "no_plans"))
-            return
-
-        if membership and membership.state in {MembershipState.ACTIVE, MembershipState.PENDING}:
-            plan = settings.plan_by_code(membership.plan_code)
-            await message.answer(
-                t(
-                    lang,
-                    "start_active",
-                    plan=plan.label if plan else membership.plan_code,
-                    expires=_fmt(membership.expires_at),
-                    days_left=_days_left(membership.expires_at),
-                ),
-                reply_markup=plans_keyboard(plans, currencies, lang),
-            )
-            return
-
-        await message.answer(
-            t(lang, "start_greeting"),
-            reply_markup=plans_keyboard(plans, currencies, lang),
-        )
+        text, markup = await _home_screen(session, user, settings)
+    await message.answer(text, reply_markup=markup)
 
 
 def _guess_lang(message: Message, settings: Settings) -> str:
-    code = (message.from_user.language_code or "").lower() if message.from_user else ""
+    return _guess_lang_code(message.from_user, settings)
+
+
+def _guess_lang_code(tg_user: TgUser | None, settings: Settings) -> str:
+    code = (tg_user.language_code or "").lower() if tg_user else ""
     if code.startswith("ru") or code.startswith("uk") or code.startswith("be"):
         return "ru"
     if code.startswith("en"):
         return "en"
     return settings.default_lang
+
+
+@router.callback_query(F.data.startswith("menu:"))
+async def menu_action(
+    callback: CallbackQuery,
+    settings: Settings,
+    sessionmaker: async_sessionmaker,
+    access: AccessManager,
+    **_: object,
+) -> None:
+    """Main-menu buttons: the same flows as the slash commands, one tap away."""
+    if callback.data is None or callback.from_user is None or callback.message is None:
+        return
+    action = callback.data.split(":", 1)[1]
+    tg_user = callback.from_user
+    reply = callback.message.answer
+
+    if action == "home":
+        async with sessionmaker() as session:
+            user = await invoice_service.ensure_user(
+                session,
+                user_id=tg_user.id,
+                username=tg_user.username,
+                full_name=tg_user.full_name,
+                default_lang=_guess_lang_code(tg_user, settings),
+            )
+            await session.commit()
+            text, markup = await _home_screen(session, user, settings)
+        try:
+            await callback.message.edit_text(text, reply_markup=markup)  # type: ignore[union-attr]
+        except TelegramBadRequest:
+            await reply(text, reply_markup=markup)
+    elif action == "lang":
+        await reply("Choose a language / Выберите язык:", reply_markup=lang_keyboard())
+    elif action == "trial":
+        await _trial_flow(tg_user, reply, settings, sessionmaker, access)
+    elif action == "status":
+        async with sessionmaker() as session:
+            lang = await _lang(session, tg_user.id, settings)
+            text = await _status_text(session, tg_user.id, settings, lang)
+        await reply(text, reply_markup=back_keyboard(lang, settings.order_url))
+    elif action == "access":
+        text, lang = await _access_text(tg_user.id, settings, sessionmaker, access)
+        await reply(
+            text,
+            reply_markup=back_keyboard(lang, settings.order_url),
+            disable_web_page_preview=True,
+        )
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("plan:"))
@@ -130,6 +202,9 @@ async def pick_plan(
     async with sessionmaker() as session:
         lang = await _lang(session, callback.from_user.id, settings)
 
+    if not currencies:
+        await callback.answer(t(lang, "no_plans"), show_alert=True)
+        return
     if len(currencies) > 1:
         await callback.message.answer(  # type: ignore[union-attr]
             t(lang, "choose_currency"), reply_markup=currency_keyboard(plan, currencies)
@@ -212,16 +287,26 @@ async def cancel_invoice(
     sessionmaker: async_sessionmaker,
     **_: object,
 ) -> None:
-    if callback.data is None:
+    if callback.data is None or callback.from_user is None:
         return
     invoice_id = int(callback.data.split(":", 1)[1])
     async with sessionmaker() as session:
         lang = await _lang(session, callback.from_user.id, settings)
         invoice = await session.get(Invoice, invoice_id)
+        if invoice is not None and invoice.user_id != callback.from_user.id:
+            await callback.answer(t(lang, "not_your_invoice"), show_alert=True)
+            return
         if invoice and invoice.status == InvoiceStatus.OPEN:
             invoice.status = InvoiceStatus.CANCELLED
             await session.commit()
-    await callback.message.answer(t(lang, "invoice_cancelled"))  # type: ignore[union-attr]
+    try:
+        # Drop the "I paid" button so a cancelled invoice cannot be poked again.
+        await callback.message.edit_reply_markup(reply_markup=None)  # type: ignore[union-attr]
+    except TelegramBadRequest:
+        pass
+    await callback.message.answer(  # type: ignore[union-attr]
+        t(lang, "invoice_cancelled"), reply_markup=back_keyboard(lang)
+    )
     await callback.answer()
 
 
@@ -244,6 +329,9 @@ async def check_payment(
 
     if invoice is None:
         await callback.answer("Invoice not found", show_alert=True)
+        return
+    if invoice.user_id != callback.from_user.id:
+        await callback.answer(t(lang, "not_your_invoice"), show_alert=True)
         return
     if invoice.status == InvoiceStatus.PAID:
         await callback.answer("Already confirmed ✅", show_alert=True)
@@ -322,20 +410,32 @@ async def cmd_trial(
     """Grant 24 hours of free trial access to the user."""
     if message.from_user is None:
         return
+    await _trial_flow(message.from_user, message.answer, settings, sessionmaker, access)
 
+
+Reply = Callable[..., Awaitable[object]]
+
+
+async def _trial_flow(
+    tg_user: TgUser,
+    reply: Reply,
+    settings: Settings,
+    sessionmaker: async_sessionmaker,
+    access: AccessManager,
+) -> None:
     async with sessionmaker() as session:
         user = await invoice_service.ensure_user(
             session,
-            user_id=message.from_user.id,
-            username=message.from_user.username,
-            full_name=message.from_user.full_name,
-            default_lang=_guess_lang(message, settings),
+            user_id=tg_user.id,
+            username=tg_user.username,
+            full_name=tg_user.full_name,
+            default_lang=_guess_lang_code(tg_user, settings),
         )
         lang = user.lang
 
         # 1. Check if trial was already used (flag, audit log, or past trial membership)
         if getattr(user, "trial_used", False):
-            await message.answer(t(lang, "trial_already_used"))
+            await reply(t(lang, "trial_already_used"))
             return
 
         trial_audit = await session.scalar(
@@ -347,14 +447,14 @@ async def cmd_trial(
         if trial_audit is not None:
             user.trial_used = True
             await session.commit()
-            await message.answer(t(lang, "trial_already_used"))
+            await reply(t(lang, "trial_already_used"))
             return
 
         membership = await session.get(Membership, user.id)
         if membership and membership.plan_code == "trial":
             user.trial_used = True
             await session.commit()
-            await message.answer(t(lang, "trial_already_used"))
+            await reply(t(lang, "trial_already_used"))
             return
 
         # 2. Check if user already has an active or in-grace paid subscription
@@ -370,7 +470,7 @@ async def cmd_trial(
             )
             and membership.plan_code != "trial"
         ):
-            await message.answer(
+            await reply(
                 t(lang, "trial_already_active", expires=_fmt(membership.expires_at))
             )
             return
@@ -400,7 +500,7 @@ async def cmd_trial(
         if invite:
             invite_section = t(lang, "access_link", invite=invite) + "\n\n"
 
-        await message.answer(
+        await reply(
             t(
                 lang,
                 "trial_granted",
@@ -422,34 +522,28 @@ async def cmd_status(
         return
     async with sessionmaker() as session:
         lang = await _lang(session, message.from_user.id, settings)
-        membership = await session.get(Membership, message.from_user.id)
-        if membership is None:
-            await message.answer(t(lang, "access_none"))
-            return
-        plan = settings.plan_by_code(membership.plan_code)
-        if plan:
-            plan_label_text = plan.label
-        elif membership.plan_code == "trial":
-            plan_label_text = "Тестовый доступ (24ч)" if lang == "ru" else "Free Trial (24h)"
-        else:
-            plan_label_text = membership.plan_code
+        text = await _status_text(session, message.from_user.id, settings, lang)
+    await message.answer(text)
 
-        state = (
-            membership.state.value
-            if hasattr(membership.state, "value")
-            else str(membership.state)
-        )
-        await message.answer(
-            t(
-                lang,
-                "status",
-                plan=plan_label_text,
-                state=state_label(lang, state),
-                expires=_fmt(membership.expires_at),
-                days_left=_days_left(membership.expires_at),
-                payments=membership.payments_count or 0,
-            )
-        )
+
+async def _status_text(session, user_id: int, settings: Settings, lang: str) -> str:
+    membership = await session.get(Membership, user_id)
+    if membership is None:
+        return t(lang, "access_none")
+    state = (
+        membership.state.value
+        if hasattr(membership.state, "value")
+        else str(membership.state)
+    )
+    return t(
+        lang,
+        "status",
+        plan=_plan_label(settings, membership.plan_code, lang),
+        state=state_label(lang, state),
+        expires=_fmt(membership.expires_at),
+        days_left=_days_left(membership.expires_at),
+        payments=membership.payments_count or 0,
+    )
 
 
 @router.message(Command("access"))
@@ -463,25 +557,33 @@ async def cmd_access(
     """Re-issue an invite link for an already-paid subscriber."""
     if message.from_user is None:
         return
+    text, _lang_code = await _access_text(message.from_user.id, settings, sessionmaker, access)
+    await message.answer(text, disable_web_page_preview=True)
+
+
+async def _access_text(
+    user_id: int,
+    settings: Settings,
+    sessionmaker: async_sessionmaker,
+    access: AccessManager,
+) -> tuple[str, str]:
     async with sessionmaker() as session:
-        lang = await _lang(session, message.from_user.id, settings)
-        membership = await session.get(Membership, message.from_user.id)
+        lang = await _lang(session, user_id, settings)
+        membership = await session.get(Membership, user_id)
         if membership is None or membership.state not in {
             MembershipState.ACTIVE,
             MembershipState.PENDING,
             MembershipState.IN_GRACE,
         }:
-            await message.answer(t(lang, "access_none"))
-            return
+            return t(lang, "access_none"), lang
         try:
-            invite = await access.create_invite(message.from_user.id)
+            invite = await access.create_invite(user_id)
         except Exception:  # noqa: BLE001
             log.exception("Re-issuing invite failed")
-            await message.answer(t(lang, "access_error"))
-            return
+            return t(lang, "access_error"), lang
         membership.invite_link = invite
         await session.commit()
-    await message.answer(t(lang, "access_link", invite=invite), disable_web_page_preview=True)
+    return t(lang, "access_link", invite=invite), lang
 
 
 @router.message(Command("lang"))
@@ -492,20 +594,27 @@ async def cmd_lang(message: Message, **_: object) -> None:
 @router.callback_query(F.data.startswith("lang:"))
 async def set_lang(
     callback: CallbackQuery,
+    settings: Settings,
     sessionmaker: async_sessionmaker,
     **_: object,
 ) -> None:
-    from gatekit.db.models import User
-
     if callback.data is None or callback.from_user is None:
         return
     lang = callback.data.split(":", 1)[1]
+    if lang not in LOCALES:
+        await callback.answer()
+        return
     async with sessionmaker() as session:
         user = await session.get(User, callback.from_user.id)
         if user:
             user.lang = lang
             await session.commit()
+            text, markup = await _home_screen(session, user, settings)
+        else:
+            text, markup = t(lang, "lang_switched"), None
     await callback.message.answer(t(lang, "lang_switched"))  # type: ignore[union-attr]
+    if markup is not None:
+        await callback.message.answer(text, reply_markup=markup)  # type: ignore[union-attr]
     await callback.answer()
 
 

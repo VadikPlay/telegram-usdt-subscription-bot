@@ -137,6 +137,21 @@ EN: dict[str, str] = {
         "🆔 <code>{id}</code>"
     ),
     "ad_open_button": "🔗 View on 999.md",
+    "menu_trial": "🎁 Free 24h trial",
+    "menu_status": "📊 My subscription",
+    "menu_access": "🔗 Get invite link",
+    "menu_lang": "🌐 Language",
+    "menu_support": "🆘 Support",
+    "menu_order": "🚀 Order a bot like this",
+    "menu_back": "⬅️ Main menu",
+    "slow_down": "Too fast — give it a second.",
+    "not_your_invoice": "This invoice is not yours.",
+    "cmd_start": "Plans and subscribing",
+    "cmd_trial": "Free 24h trial",
+    "cmd_status": "My subscription",
+    "cmd_access": "Get my invite link again",
+    "cmd_lang": "Switch language",
+    "cmd_help": "Help and support",
 }
 
 RU: dict[str, str] = {
@@ -269,6 +284,21 @@ RU: dict[str, str] = {
         "🆔 <code>{id}</code>"
     ),
     "ad_open_button": "🔗 Открыть на 999.md",
+    "menu_trial": "🎁 Тест 24 часа бесплатно",
+    "menu_status": "📊 Моя подписка",
+    "menu_access": "🔗 Получить ссылку",
+    "menu_lang": "🌐 Язык",
+    "menu_support": "🆘 Поддержка",
+    "menu_order": "🚀 Заказать такого бота",
+    "menu_back": "⬅️ Главное меню",
+    "slow_down": "Слишком быстро — секунду.",
+    "not_your_invoice": "Это не ваш счёт.",
+    "cmd_start": "Тарифы и подписка",
+    "cmd_trial": "Бесплатный тест на 24 часа",
+    "cmd_status": "Моя подписка",
+    "cmd_access": "Получить ссылку заново",
+    "cmd_lang": "Сменить язык",
+    "cmd_help": "Помощь и поддержка",
 }
 
 LOCALES: dict[str, dict[str, str]] = {"en": EN, "ru": RU}

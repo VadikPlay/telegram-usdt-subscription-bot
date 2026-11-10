@@ -15,7 +15,7 @@ Gatekit reads the chain ──┘──► issues a single-use invite link
 
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Tests](https://img.shields.io/badge/tests-53%20unit%20%2B%2056%20end--to--end-brightgreen)
+![Tests](https://img.shields.io/badge/tests-80%20unit%20%2B%2056%20end--to--end-brightgreen)
 
 ---
 
@@ -32,6 +32,10 @@ Gatekit reads the chain ──┘──► issues a single-use invite link
   guard agrees (see below).
 - **Admin panel inside the bot**: revenue, active subscribers, who is lapsing,
   manual grant/extend/revoke, CSV export, broadcast, per-user audit trail.
+- **One-tap main menu**: plans, free trial, status, invite link, language and
+  support as buttons — plus the Telegram "Menu" command list in EN and RU.
+- **Anti-flood throttling** per user, so nobody can hammer the "check payment"
+  button and burn your TronGrid rate limit. Admins are exempt.
 - **Runs on one command**: `docker compose up -d`. SQLite, no database to install,
   no inbound ports, no webhooks.
 
@@ -98,7 +102,7 @@ You need: a VPS with Docker, a Telegram bot token, a private channel, and a TRON
 wallet address.
 
 ```bash
-git clone https://github.com/YOUR_GITHUB_USERNAME/telegram-usdt-subscription-bot.git
+git clone https://github.com/VadikPlay/telegram-usdt-subscription-bot.git
 cd telegram-usdt-subscription-bot
 cp .env.example .env
 nano .env                 # fill in BOT_TOKEN, CHANNEL_ID, ADMIN_IDS, TRON_WALLET
@@ -178,6 +182,9 @@ matter most:
 | `INVOICE_TTL_MINUTES` | `60` | How long an invoice's unique amount is held |
 | `PAYMENT_LATE_TOLERANCE_MINUTES` | `180` | How late a payment is still honoured |
 | `REQUIRE_MANUAL_KICK_CONFIRMATION` | `false` | Admin must confirm every removal |
+| `SUPPORT_CONTACT` | empty | `@username` or link; adds a Support button |
+| `ORDER_CONTACT` | empty | `@username` or link; adds a "🚀 Order a bot like this" button |
+| `THROTTLE_SECONDS` | `0.7` | Min interval between updates from one user |
 
 ### A note on the TronGrid rate limit
 
@@ -294,7 +301,7 @@ Nowhere. It goes from the subscriber to your wallet. Gatekit only reads.
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                     # 53 unit tests
+pytest -q                     # 80 unit tests
 python scripts/selftest.py    # 56 end-to-end checks
 ruff check src tests scripts
 ```
@@ -316,7 +323,7 @@ yet:
 - **Integrations**: CRM, Google Sheets, analytics, your existing stack
 - **Migration** from a hosted platform to self-hosted
 
-Contact: **[@YOUR_TELEGRAM](https://t.me/YOUR_TELEGRAM)** · fixed price, escrow
+Contact: **[@EuNekto](https://t.me/EuNekto)** · fixed price, escrow
 welcome, async by default — no calls required.
 
 ## License

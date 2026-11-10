@@ -15,18 +15,21 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramAPIError, TelegramUnauthorizedError
+from aiogram.types import BotCommand
 from pydantic import ValidationError
 
 from gatekit import __version__
 from gatekit.bot.handlers import admin as admin_handlers
 from gatekit.bot.handlers import member as member_handlers
 from gatekit.bot.handlers import user as user_handlers
+from gatekit.bot.middlewares import ThrottlingMiddleware
 from gatekit.chains.base import ChainClient
 from gatekit.chains.ton import TonClient
 from gatekit.chains.tron import TronClient
 from gatekit.config import Settings, get_settings
 from gatekit.db.base import dispose_engine, get_sessionmaker, init_db
 from gatekit.services.access import AccessManager
+from gatekit.texts import t
 from gatekit.workers.payment_watcher import PaymentWatcher
 from gatekit.workers.scheduler import SubscriptionScheduler
 from gatekit.workers.scraper_worker import ScraperWorker
@@ -114,6 +117,27 @@ async def verify_channel_rights(bot: Bot, settings: Settings) -> None:
     log.info("Channel rights verified for @%s", me.username)
 
 
+USER_COMMANDS = ("start", "trial", "status", "access", "lang", "help")
+
+
+async def setup_commands(bot: Bot) -> None:
+    """Fill the "Menu" button next to the input field, per language.
+
+    Cosmetic: a failure here is logged and never blocks startup.
+    """
+    try:
+        for lang in ("en", "ru"):
+            commands = [
+                BotCommand(command=name, description=t(lang, f"cmd_{name}"))
+                for name in USER_COMMANDS
+            ]
+            await bot.set_my_commands(
+                commands, language_code=None if lang == "en" else lang
+            )
+    except TelegramAPIError as exc:
+        log.warning("Could not set the bot command menu: %s", exc)
+
+
 def load_settings_or_explain() -> Settings:
     """Turn a pydantic validation dump into instructions a human can act on."""
     try:
@@ -182,7 +206,12 @@ async def run_bot() -> None:
             sessionmaker=sessionmaker,
         )
 
+    await setup_commands(bot)
+
     dp = Dispatcher()
+    throttle = ThrottlingMiddleware(settings.throttle_seconds, exempt=settings.admin_id_set)
+    dp.message.outer_middleware(throttle)
+    dp.callback_query.outer_middleware(throttle)
     dp.include_router(admin_handlers.router)
     dp.include_router(user_handlers.router)
     dp.include_router(member_handlers.router)

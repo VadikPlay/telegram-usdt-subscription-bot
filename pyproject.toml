@@ -34,8 +34,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/YOUR_GITHUB_USERNAME/telegram-usdt-subscription-bot"
-Issues = "https://github.com/YOUR_GITHUB_USERNAME/telegram-usdt-subscription-bot/issues"
+Homepage = "https://github.com/VadikPlay/telegram-usdt-subscription-bot"
+Issues = "https://github.com/VadikPlay/telegram-usdt-subscription-bot/issues"
 
 [project.scripts]
 gatekit = "gatekit.__main__:run"

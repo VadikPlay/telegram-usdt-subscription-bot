@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     admin_ids: str = ""
     support_contact: str = ""
     default_lang: str = "en"
+    # Optional "Order a bot like this" button in the main menu (demo / showcase).
+    # Accepts @username or a full https:// link. Empty = button hidden.
+    order_contact: str = ""
+    # Per-user minimum interval between updates; protects against button mashing.
+    throttle_seconds: float = 0.7
 
     # ── Plans ───────────────────────────────────────────────────────────────
     plans: str = "month:30:39.00"
@@ -135,6 +140,14 @@ class Settings(BaseSettings):
         return sorted(set(days), reverse=True)
 
     @property
+    def support_url(self) -> str | None:
+        return contact_url(self.support_contact)
+
+    @property
+    def order_url(self) -> str | None:
+        return contact_url(self.order_contact)
+
+    @property
     def tron_base_url(self) -> str:
         return TRON_ENDPOINTS[self.tron_network]
 
@@ -190,6 +203,27 @@ class Settings(BaseSettings):
             if missing:
                 problems.append(f"TON is on but TON_PRICES has no price for plans: {missing}")
         return problems
+
+
+def contact_url(raw: str) -> str | None:
+    """Turn ``@name`` / ``t.me/name`` / ``https://...`` into a button URL.
+
+    >>> contact_url("@orbitdev")
+    'https://t.me/orbitdev'
+    >>> contact_url("") is None
+    True
+    """
+    value = (raw or "").strip()
+    if not value:
+        return None
+    if value.startswith(("https://", "http://", "tg://")):
+        return value
+    if value.startswith("t.me/"):
+        return f"https://{value}"
+    name = value.lstrip("@")
+    if name.replace("_", "").isalnum():
+        return f"https://t.me/{name}"
+    return None
 
 
 def _parse_decimal(raw: str, field: str) -> Decimal:
